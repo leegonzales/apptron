@@ -1,197 +1,124 @@
 # AI Agent Sandbox Setup Guide
 
-## The Challenge
+## Current Status (Updated)
 
-Apptron runs **32-bit x86 Alpine Linux** via emulation. Modern AI CLI tools (Claude Code, Gemini CLI, Codex) are compiled for x86_64 only. This means they won't run natively inside the sandbox.
-
-## Solution: Hybrid Architecture
-
-Run AI agents on your Mac, but have them execute commands inside the Apptron sandbox via SSH.
-
-```
-┌──────────────────────────────┐     ┌──────────────────────────────┐
-│          YOUR MAC            │     │    APPTRON SANDBOX           │
-│  ┌────────────────────────┐  │     │  ┌────────────────────────┐  │
-│  │   Claude Code (YOLO)   │  │ SSH │  │   Alpine Linux (x86)   │  │
-│  │   Gemini CLI           │──┼─────┼──│   - git, python, node  │  │
-│  │   Codex                │  │     │  │   - your project code  │  │
-│  └────────────────────────┘  │     │  │   - isolated filesystem │  │
-│                              │     │  └────────────────────────┘  │
-└──────────────────────────────┘     └──────────────────────────────┘
-```
-
-## Quick Setup
-
-### Step 1: Bootstrap the Sandbox
-
-Inside your Apptron project terminal, run:
-
-```sh
-# Download and run bootstrap script
-curl -O https://raw.githubusercontent.com/leegonzales/apptron/main/sandbox-bootstrap.sh
-chmod +x sandbox-bootstrap.sh
-./sandbox-bootstrap.sh
-```
-
-Or manually:
-```sh
-apk update
-apk add git curl python3 py3-pip nodejs npm openssh dropbear
-```
-
-### Step 2: Set Up SSH Access
-
-Inside Apptron:
-```sh
-# Install dropbear (lightweight SSH server)
-apk add dropbear
-
-# Generate host keys
-dropbearkey -t rsa -f /etc/dropbear/dropbear_rsa_host_key
-dropbearkey -t ecdsa -f /etc/dropbear/dropbear_ecdsa_host_key
-
-# Create your user (use your Mac username for convenience)
-adduser -D yourname
-echo "yourname:sandbox123" | chpasswd
-
-# Start SSH server on port 22
-dropbear -p 22 -E -F &
-
-# Note your session IP (shown in terminal prompt or run:)
-hostname -i
-```
-
-### Step 3: Get Your Public URL
-
-Apptron creates a public URL for any port you expose. Look for something like:
-```
-tcp-22-c0a87fxx-localdev.apptron.dev
-```
-
-Or construct it:
-- Port: 22
-- IP: Convert your session IP (192.168.127.xx) to hex
-- Pattern: `tcp-{port}-{hex-ip}-{user}.apptron.dev`
-
-### Step 4: Connect AI Agents
-
-On your Mac, configure Claude Code to use the sandbox:
-
-```sh
-# Test SSH connection first
-ssh yourname@tcp-22-c0a87fxx-localdev.apptron.dev
-
-# Run Claude Code with SSH remote
-claude --remote ssh://yourname@tcp-22-c0a87fxx-localdev.apptron.dev
-```
-
-Or configure in `.claude/settings.json`:
-```json
-{
-  "remote": {
-    "host": "tcp-22-c0a87fxx-localdev.apptron.dev",
-    "user": "yourname"
-  }
-}
-```
-
-## Multiple Sandboxes (One Per Project)
-
-1. Create a new Apptron project for each repo
-2. Each gets its own isolated filesystem
-3. Each can have its own SSH server on port 22
-4. Each gets a unique public URL
-
-```
-Project: my-api        → tcp-22-abc123-localdev.apptron.dev
-Project: my-frontend   → tcp-22-def456-localdev.apptron.dev
-Project: experiments   → tcp-22-ghi789-localdev.apptron.dev
-```
-
-## YOLO Mode Configuration
-
-For maximum AI agent freedom, configure Claude Code:
-
-```sh
-# On your Mac - run against the sandbox
-claude --dangerously-skip-permissions --remote ssh://user@sandbox-url
-```
-
-The AI can now:
-- Run any command in the sandbox
-- Modify any file
-- Install packages
-- Run servers
-- **Cannot damage your Mac** - everything is isolated!
-
-## What Works Inside the Sandbox
+### What Works
 
 | Tool | Status | Notes |
 |------|--------|-------|
 | git | ✅ Works | `apk add git` |
 | python3 | ✅ Works | `apk add python3 py3-pip` |
-| node/npm | ✅ Works | `apk add nodejs npm` |
+| node/npm | ✅ Works | Node 24 available via `apk add nodejs npm` |
 | pip packages | ✅ Works | Most pure Python packages |
 | npm packages | ✅ Works | Pure JS packages |
 | make | ✅ Works | Pre-installed |
 | curl/wget | ✅ Works | Full network access |
 | go | ✅ Works | `source /etc/goprofile` |
-| bun | ❌ 64-bit only | Use npm instead |
-| uv | ⚠️ Maybe | Try `pip install uv` |
-| claude-code | ❌ 64-bit only | Run on Mac, SSH into sandbox |
-| gemini-cli | ❌ 64-bit only | Run on Mac, SSH into sandbox |
+| **claude-code** | ⚠️ Installs, OAuth blocked | See below |
+| gemini-cli | ❌ Native binary | 64-bit only |
+| bun | ❌ Native binary | 64-bit only |
 
-## Alternative: Git-Based Workflow
+### Claude Code Status
 
-If SSH is problematic, use a git-based approach:
-
-1. Create a GitHub repo for your project
-2. Clone it into both your Mac AND the Apptron sandbox
-3. Run AI agents on Mac against local clone
-4. When AI makes changes, push to GitHub
-5. Pull changes in Apptron sandbox to test
+**Good news:** Claude Code npm package installs and runs! Node 24 is available in Alpine x86.
 
 ```sh
-# On Mac - AI works here
-claude "refactor the authentication module"
-git push
-
-# In Apptron - test here
-git pull
-npm test
+apk add nodejs npm
+npm install -g @anthropic-ai/claude-code
+claude  # This works!
 ```
 
-## Persistence Notes
+**The blocker:** OAuth login requires a browser redirect, which doesn't work in Apptron's browser-in-browser environment.
 
-- **Persisted**: `/home`, `/project`, `/public` directories
-- **Reset on reload**: System directories, installed packages
+### Authentication Options
 
-To persist your SSH setup, add to your project's init script:
+| Method | Works in Apptron? | Notes |
+|--------|-------------------|-------|
+| OAuth (Pro/Max subscription) | ❌ No | Browser redirect fails |
+| API Key (`ANTHROPIC_API_KEY`) | ✅ Yes | Separate billing from subscription |
+
+**If you have a Pro subscription:** The OAuth token is stored in macOS Keychain and is not portable to Apptron. You would need a separate API key for sandbox work.
+
+## Recommended Approaches
+
+### For API Key Users
+
+If you're using API key billing (not Pro subscription):
+
 ```sh
-# Save this as ~/init.sh and it will run on project load
-apk add dropbear
-dropbear -p 22 -E &
+# In Apptron terminal
+apk add nodejs npm git python3
+npm install -g @anthropic-ai/claude-code
+
+export ANTHROPIC_API_KEY=sk-ant-xxxxx
+claude
 ```
 
-## Security Notes
+This works fully inside Apptron.
 
-- The sandbox is isolated from your Mac
-- Network is virtual (192.168.127.0/24)
-- Files can't escape to your Mac filesystem
-- Worst case: reload the page to reset everything
-- API keys in the sandbox stay in the sandbox
+### For Pro Subscription Users
 
-## Troubleshooting
+**Apptron is not ideal for Claude Code with Pro subscriptions** due to OAuth limitations.
 
-**Can't connect via SSH?**
-- Check the sandbox is running (browser tab open)
-- Verify the public URL format
-- Try: `curl -v https://tcp-22-xxx.apptron.dev` to test
+Better alternatives:
 
-**Packages not persisting?**
-- Add install commands to `~/init.sh`
-- Or use the project filesystem for state
+1. **Docker sandbox on Mac**: Run Claude Code on Mac with Pro auth, mount a Docker container's filesystem
+2. **Git reset safety net**: Run Claude Code in YOLO mode on Mac inside a git repo - use `git reset --hard` to undo damage
+3. **Separate API key**: Get an API key for sandbox experiments (separate billing)
 
-**AI agent timeouts?**
-- v86 emulation is slower than native
-- Increase timeout settings in your AI agent config
+### Using Anthropic API Directly (Alternative)
+
+If Claude Code OAuth doesn't work, use the API directly:
+
+```sh
+# In Apptron
+apk add python3 py3-pip
+pip install anthropic
+
+python3 << 'EOF'
+import anthropic
+import os
+
+# Set your API key
+os.environ["ANTHROPIC_API_KEY"] = "sk-ant-xxxxx"
+
+client = anthropic.Anthropic()
+response = client.messages.create(
+    model="claude-sonnet-4-20250514",
+    max_tokens=1024,
+    messages=[{"role": "user", "content": "Hello from Apptron!"}]
+)
+print(response.content[0].text)
+EOF
+```
+
+## Quick Setup (API Key Users)
+
+```sh
+# One-liner setup in Apptron terminal
+apk add nodejs npm git python3 py3-pip curl && \
+npm install -g @anthropic-ai/claude-code && \
+echo 'export ANTHROPIC_API_KEY=your-key-here' >> ~/.profile && \
+source ~/.profile && \
+claude
+```
+
+## What Apptron IS Good For
+
+Even without full Claude Code integration, Apptron provides:
+
+- **Isolated Linux environment** for experiments
+- **Full network access** for package installation
+- **Persistent project storage** synced to cloud
+- **No-install browser access** - share URLs with others
+- **Safe experimentation** - reload page to reset
+
+## Future Improvements Needed
+
+For full AI agent sandbox support, Apptron would need:
+
+1. **64-bit support** - Replace v86 with QEMU-Wasm (see UPGRADE_PROPOSAL.md)
+2. **OAuth relay** - Mechanism to complete OAuth flow via parent browser
+3. **Credential bridge** - Way to pass Mac Keychain tokens to sandbox
+
+See `UPGRADE_PROPOSAL.md` for technical paths to these improvements.
