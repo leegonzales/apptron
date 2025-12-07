@@ -93,26 +93,27 @@ export default {
         }
 
         if (["/dashboard", "/shell"].includes(url.pathname)) {
-            if (!await validateToken(env.AUTH_URL, ctx.tokenRaw)) {
+            if (!await validateToken(env.AUTH_URL, ctx.tokenRaw, isLocal(env))) {
                 return redirectToSignin(env, url);
             }
         }
 
         if (url.pathname.startsWith("/data")) {
-            const authenticated = await validateToken(env.AUTH_URL, ctx.tokenRaw);
+            const authenticated = await validateToken(env.AUTH_URL, ctx.tokenRaw, isLocal(env));
 
             let dataPath = url.pathname.slice(5);
             if (dataPath.endsWith("/...")) {
                 dataPath = dataPath.slice(0, -4);
             }
             // admin data urls
-            if (dataPath.includes("/:attr/") || 
+            if (dataPath.includes("/:attr/") ||
                 dataPath.startsWith("/etc/") ||
                 ["","/etc","/env","/usr"].indexOf(dataPath) !== -1) {
                 if (!authenticated) {
                     return new Response("Forbidden", { status: 403 });
                 }
-                if (!ADMIN_USERS.includes(ctx.tokenJWT?.username)) {
+                // Skip admin check in local dev mode - you're the only user
+                if (!isLocal(env) && !ADMIN_USERS.includes(ctx.tokenJWT?.username)) {
                     return new Response("Forbidden", { status: 403 });
                 }
             }
@@ -162,12 +163,17 @@ export default {
 
         if (url.pathname === "/" && req.method === "GET") {
             await ensureSystemDirs(req, env);
+            // Skip signin for local development
+            if (isLocal(env)) {
+                url.pathname = "/dashboard";
+                return Response.redirect(url.toString(), 307);
+            }
             return redirectToSignin(env, url);
         }
 
         if (ctx.userDomain && url.pathname === "/" && req.method === "PUT") {
             // ensure user is set up
-            if (!await validateToken(env.AUTH_URL, ctx.tokenRaw)) {
+            if (!await validateToken(env.AUTH_URL, ctx.tokenRaw, isLocal(env))) {
                 return new Response("Forbidden", { status: 403 });
             }
             const user = await req.json();

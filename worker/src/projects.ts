@@ -1,12 +1,12 @@
 import { Context } from "./context";
 import { validateToken } from "./auth";
-import { uuidv4, putdir, deletepath, copypath, checkpath } from "./util";
+import { uuidv4, putdir, deletepath, copypath, checkpath, isLocal } from "./util";
 import { getAttrs } from "./r2fs";
 
 export async function handle(req: Request, env: any, ctx: Context) {
 
     // todo: keep in mind cross origin possibility
-    if (!await validateToken(env.AUTH_URL, ctx.tokenRaw)) {
+    if (!await validateToken(env.AUTH_URL, ctx.tokenRaw, isLocal(env))) {
         return new Response("Forbidden", { status: 403 });
     }
 

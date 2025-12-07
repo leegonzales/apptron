@@ -13,6 +13,10 @@ export interface Context {
     subdomain?: string; // username or env UUID
 }
 
+function isLocal(env: any): boolean {
+    return !!(env && env.LOCALHOST);
+}
+
 export function parseContext(req: Request, env: any): Context {
     const url = new URL(req.url);
     const ctx: Context = {
@@ -37,6 +41,12 @@ export function parseContext(req: Request, env: any): Context {
         ctx.tokenJWT = parseJWT(ctx.tokenRaw);
         ctx.userUUID = ctx.tokenJWT["sub"]; // should be user_id
         ctx.username = ctx.tokenJWT["username"];
+    }
+
+    // Default user for local development when no token
+    if (isLocal(env) && !ctx.username) {
+        ctx.userUUID = "local-dev-user";
+        ctx.username = "localdev";
     }
 
     if (url.host.endsWith("." + HOST_DOMAIN)) {

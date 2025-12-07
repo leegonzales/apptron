@@ -3,7 +3,12 @@ interface ValidationResponse {
     is_valid: boolean;
 }
 
-export async function validateToken(hankoApiUrl: string, token: string): Promise<boolean> {
+export async function validateToken(hankoApiUrl: string, token: string, isLocal: boolean = false): Promise<boolean> {
+  // Skip auth for local development
+  if (isLocal) {
+    return true;
+  }
+
   if (!token || token.length === 0) {
     return false;
   }

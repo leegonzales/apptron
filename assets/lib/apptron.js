@@ -31,6 +31,27 @@ export async function getAuth() {
     if (auth) {
         return auth;
     }
+
+    // Mock auth for local development
+    if (isLocalhost()) {
+        const mockUser = {
+            user_id: "local-dev-user",
+            username: "localdev",
+            email: "dev@localhost",
+            created_at: new Date().toISOString()
+        };
+        auth = {
+            getUser: () => Promise.resolve(mockUser),
+            validateSession: () => Promise.resolve({ is_valid: true, claims: mockUser }),
+            validatedSession: Promise.resolve({ is_valid: true, claims: mockUser }),
+            onSessionCreated: () => {},
+            logout: () => Promise.resolve(),
+            getSessionToken: () => "local-dev-mock-token"
+        };
+        console.log("Using mock auth for local development");
+        return auth;
+    }
+
     if (!getMeta("auth-url")) {
         throw new Error("auth-url meta tag not found");
     }
