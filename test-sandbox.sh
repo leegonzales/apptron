@@ -8,7 +8,7 @@ echo "   APPTRON SANDBOX STRESS TEST"
 echo "=========================================="
 echo ""
 
-# Colors for fun output (if terminal supports it)
+# Colors for fun output (using printf for sh compatibility)
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
@@ -23,17 +23,17 @@ test_cmd() {
     shift
     printf "%-40s" "Testing: $name..."
     if "$@" >/dev/null 2>&1; then
-        echo "${GREEN}PASS${NC}"
+        printf "${GREEN}PASS${NC}\n"
         passed=$((passed + 1))
     else
-        echo "${RED}FAIL${NC}"
+        printf "${RED}FAIL${NC}\n"
         failed=$((failed + 1))
     fi
 }
 
 section() {
     echo ""
-    echo "${BLUE}=== $1 ===${NC}"
+    printf "${BLUE}=== %s ===${NC}\n" "$1"
 }
 
 # ============================================
@@ -103,10 +103,10 @@ echo ""
 for pkg in curl wget git python3 py3-pip nodejs npm vim nano htop; do
     printf "%-40s" "Installing: $pkg..."
     if apk add --no-cache "$pkg" >/dev/null 2>&1; then
-        echo "${GREEN}OK${NC}"
+        printf "${GREEN}OK${NC}\n"
         passed=$((passed + 1))
     else
-        echo "${YELLOW}SKIP${NC} (may not exist for x86)"
+        printf "${YELLOW}SKIP${NC} (may not exist for x86)\n"
         failed=$((failed + 1))
     fi
 done
@@ -305,16 +305,16 @@ echo "=========================================="
 echo "   TEST COMPLETE"
 echo "=========================================="
 echo ""
-echo "  Passed: ${GREEN}$passed${NC}"
-echo "  Failed: ${RED}$failed${NC}"
+printf "  Passed: ${GREEN}%d${NC}\n" "$passed"
+printf "  Failed: ${RED}%d${NC}\n" "$failed"
 echo ""
 
 if [ $failed -eq 0 ]; then
-    echo "${GREEN}All tests passed! Your sandbox is working great.${NC}"
+    printf "${GREEN}All tests passed! Your sandbox is working great.${NC}\n"
 elif [ $failed -lt 5 ]; then
-    echo "${YELLOW}Most tests passed. Some features may be limited.${NC}"
+    printf "${YELLOW}Most tests passed. Some features may be limited.${NC}\n"
 else
-    echo "${RED}Several tests failed. Check the output above.${NC}"
+    printf "${RED}Several tests failed. Check the output above.${NC}\n"
 fi
 
 echo ""
