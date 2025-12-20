@@ -10,3 +10,9 @@ node_modules
 /assets/wanix.js
 kernel/bzImage
 .env.local
+
+# Claude Code local config (may contain API keys)
+.claude/
+
+# Beads issue tracker (local database)
+.beads/
